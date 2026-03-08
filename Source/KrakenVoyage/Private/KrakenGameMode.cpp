@@ -60,26 +60,26 @@ void AKrakenGameMode::FindAndRegisterBoxes()
 		AExplorationBox* Box = Cast<AExplorationBox>(Actor);
 		if (!Box) continue;
 
-		const int32 PI = Box->OwnerPlayerIndex;
-		const int32 BI = Box->BoxIndex;
+		const int32 OwnerIdx = Box->OwnerPlayerIndex;
+		const int32 BoxIdx = Box->BoxIndex;
 
-		if (PI >= 0 && PI < 8 && BI >= 0 && BI < 5)
+		if (OwnerIdx >= 0 && OwnerIdx < 8 && BoxIdx >= 0 && BoxIdx < 5)
 		{
-			if (RegisteredBoxes[PI][BI] != nullptr)
+			if (RegisteredBoxes[OwnerIdx][BoxIdx] != nullptr)
 			{
 				UE_LOG(LogTemp, Warning, 
 					TEXT("[GameMode] Duplicate box! Player %d, Box %d already registered"),
-					PI, BI);
+					OwnerIdx, BoxIdx);
 			}
-			RegisteredBoxes[PI][BI] = Box;
+			RegisteredBoxes[OwnerIdx][BoxIdx] = Box;
 			UE_LOG(LogTemp, Log, TEXT("[GameMode] Registered box: Player %d, Box %d -> %s"),
-				   PI, BI, *Box->GetName());
+				   OwnerIdx, BoxIdx, *Box->GetName());
 		}
 		else
 		{
 			UE_LOG(LogTemp, Warning, 
 				TEXT("[GameMode] Box %s has invalid indices: Player=%d, Box=%d"),
-				*Box->GetName(), PI, BI);
+				*Box->GetName(), OwnerIdx, BoxIdx);
 		}
 	}
 }
