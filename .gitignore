@@ -1,0 +1,22 @@
+# Build
+
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.sln
+
+# Packaged builds
+
+Windows/
+Linux/
+LinuxArm64/
+Android/
+Mac/
+
+# Large assets
+
+*BuiltData*.uasset
+*HDRI*.uasset
