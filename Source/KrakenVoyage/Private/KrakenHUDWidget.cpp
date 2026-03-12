@@ -3,6 +3,7 @@
 #include "KrakenHUDWidget.h"
 #include "KrakenGameState.h"
 #include "KrakenPlayerController.h"
+#include "KrakenPlayerState.h"
 #include "KrakenCharacter.h"
 #include "ExplorationBox.h"
 #include "Components/TextBlock.h"
@@ -19,7 +20,6 @@ void UKrakenHUDWidget::NativeConstruct()
 		   CachedPC ? TEXT("OK") : TEXT("NULL"),
 		   CachedGS ? TEXT("OK") : TEXT("NULL"));
 
-	// 초기에 조건부 위젯들은 숨김
 	SetTextSafe(Text_InteractionHint, TEXT(""), FLinearColor::White, ESlateVisibility::Hidden);
 	SetTextSafe(Text_LastRevealed, TEXT(""), FLinearColor::White, ESlateVisibility::Hidden);
 	SetTextSafe(Text_GameResult, TEXT(""), FLinearColor::White, ESlateVisibility::Hidden);
@@ -31,11 +31,8 @@ void UKrakenHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	UpdateHUDData();
 }
 
-// ============================================================================
-// 헬퍼: 안전하게 텍스트/색상/Visibility 설정
-// ============================================================================
 void UKrakenHUDWidget::SetTextSafe(UTextBlock* TextBlock, const FString& InText,
-	FLinearColor Color, ESlateVisibility InVisibility)
+								   FLinearColor Color, ESlateVisibility InVisibility)
 {
 	if (!TextBlock) return;
 	TextBlock->SetText(FText::FromString(InText));
@@ -43,9 +40,6 @@ void UKrakenHUDWidget::SetTextSafe(UTextBlock* TextBlock, const FString& InText,
 	TextBlock->SetVisibility(InVisibility);
 }
 
-// ============================================================================
-// 매 틱 데이터 업데이트
-// ============================================================================
 void UKrakenHUDWidget::UpdateHUDData()
 {
 	if (!CachedGS)
@@ -67,8 +61,11 @@ void UKrakenHUDWidget::UpdateHUDData()
 	const FLinearColor CyanColor(0.2f, 0.8f, 1.0f);
 	const FLinearColor YellowColor(1.0f, 1.0f, 0.3f);
 
+	// 내 플레이어 인덱스 (멀티플레이어에서 각자 다름)
+	const int32 MyIndex = CachedPC->GetMyPlayerIndex();
+
 	// ================================================================
-	// 좌측 상단: 게임 정보 (항상 표시)
+	// 좌측 상단: 게임 정보
 	// ================================================================
 	SetTextSafe(Text_Phase, GetPhaseDisplayName(CachedGS->CurrentPhase), YellowColor);
 
@@ -96,7 +93,7 @@ void UKrakenHUDWidget::UpdateHUDData()
 		WhiteColor);
 
 	// ================================================================
-	// 좌측 하단: 내 정보 (항상 표시)
+	// 좌측 하단: 내 정보
 	// ================================================================
 	if (CachedPC->MyRole == EPlayerRole::Crew)
 	{
@@ -125,10 +122,11 @@ void UKrakenHUDWidget::UpdateHUDData()
 	// ================================================================
 	if (CachedGS->CurrentPhase == EKrakenGamePhase::Discussion)
 	{
-		// 디버그 모드에서는 항상 Player 0이 플레이어
-		if (CachedGS->ActionHolderPlayerIndex == 0)
+		// ★ 핵심: MyIndex와 비교하여 내 턴인지 판단
+		const bool bIsMyTurn = (CachedGS->ActionHolderPlayerIndex == MyIndex);
+		if (bIsMyTurn)
 		{
-			SetTextSafe(Text_ActionHolder, TEXT("YOUR TURN - Select a box!"), YellowColor);
+			SetTextSafe(Text_ActionHolder, TEXT("YOUR TURN - Select a box! (then ConfirmReveal)"), YellowColor);
 		}
 		else
 		{
@@ -155,7 +153,7 @@ void UKrakenHUDWidget::UpdateHUDData()
 	}
 
 	// ================================================================
-	// 하단 중앙: 상호작용 힌트 (상자 바라볼 때만)
+	// 하단 중앙: 상호작용 힌트
 	// ================================================================
 	AKrakenCharacter* MyChar = Cast<AKrakenCharacter>(CachedPC->GetPawn());
 	if (MyChar && MyChar->CurrentInteractTarget)
@@ -183,7 +181,7 @@ void UKrakenHUDWidget::UpdateHUDData()
 	}
 
 	// ================================================================
-	// 중앙: 카드 공개 알림 (공개 직후만)
+	// 중앙: 카드 공개 알림
 	// ================================================================
 	if (CachedGS->CurrentPhase == EKrakenGamePhase::Reveal ||
 		CachedGS->CurrentPhase == EKrakenGamePhase::Discussion)
@@ -217,7 +215,7 @@ void UKrakenHUDWidget::UpdateHUDData()
 	}
 
 	// ================================================================
-	// 중앙: 게임 결과 (게임 종료 시만)
+	// 중앙: 게임 결과
 	// ================================================================
 	if (CachedGS->CurrentPhase == EKrakenGamePhase::GameOver)
 	{
@@ -244,9 +242,8 @@ void UKrakenHUDWidget::UpdateHUDData()
 
 		SetTextSafe(Text_GameResult, ResultText, ResultColor, ESlateVisibility::HitTestInvisible);
 
-		// 게임 종료 시 다른 알림 숨기기
 		if (Text_LastRevealed) Text_LastRevealed->SetVisibility(ESlateVisibility::Hidden);
-		if (Text_ActionHolder) SetTextSafe(Text_ActionHolder, TEXT(""));
+		SetTextSafe(Text_ActionHolder, TEXT(""));
 	}
 	else
 	{
@@ -257,9 +254,6 @@ void UKrakenHUDWidget::UpdateHUDData()
 	}
 }
 
-// ============================================================================
-// 페이즈 이름
-// ============================================================================
 FString UKrakenHUDWidget::GetPhaseDisplayName(EKrakenGamePhase Phase) const
 {
 	switch (Phase)

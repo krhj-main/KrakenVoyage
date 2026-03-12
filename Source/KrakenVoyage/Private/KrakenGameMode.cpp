@@ -7,6 +7,7 @@
 #include "KrakenCharacter.h"
 #include "ExplorationBox.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
 
 AKrakenGameMode::AKrakenGameMode()
@@ -25,12 +26,43 @@ void AKrakenGameMode::BeginPlay()
 
 	if (bDebugMode && bAutoStartGame)
 	{
+		// 멀티플레이어일 수 있으니 충분한 딜레이 (모든 플레이어 접속 대기)
+		const float StartDelay = 2.0f;
 		GetWorldTimerManager().SetTimer(PhaseTransitionTimerHandle, [this]()
 		{
-			UE_LOG(LogTemp, Log, TEXT("[GameMode] Debug: Auto-starting game..."));
+			UE_LOG(LogTemp, Log, TEXT("[GameMode] Auto-starting game. Real players: %d"),
+				   PlayerControllers.Num());
 			StartGame();
-		}, 1.0f, false);
+		}, StartDelay, false);
 	}
+}
+
+// ============================================================================
+// ChoosePlayerStart - 플레이어를 순서대로 다른 위치에 스폰
+// ============================================================================
+AActor* AKrakenGameMode::ChoosePlayerStart_Implementation(AController* Player, const FString& IncomingName)
+{
+	// 레벨의 모든 PlayerStart를 찾아서 캐싱
+	if (PlayerStartActors.Num() == 0)
+	{
+		// PlayerStart가 없으면 기본 동작
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), PlayerStartActors);
+		UE_LOG(LogTemp, Log, TEXT("[GameMode] Found %d PlayerStart actors"), PlayerStartActors.Num());
+	}
+
+	if (PlayerStartActors.Num() == 0)
+	{
+		return Super::ChoosePlayerStart_Implementation(Player);
+	}
+
+	// 현재 접속한 플레이어 수 기준으로 순서대로 배정
+	// PostLogin이 호출되기 전이므로, 현재 PlayerControllers.Num()이 이 플레이어의 인덱스
+	const int32 SpawnIndex = PlayerControllers.Num(); // 아직 Add 전이므로 0부터 시작
+	const int32 StartIndex = SpawnIndex % PlayerStartActors.Num();
+
+	UE_LOG(LogTemp, Log, TEXT("[GameMode] Player %d -> PlayerStart %d"), SpawnIndex, StartIndex);
+	return PlayerStartActors[StartIndex];
+	
 }
 
 // ============================================================================
@@ -67,19 +99,12 @@ void AKrakenGameMode::FindAndRegisterBoxes()
 		{
 			if (RegisteredBoxes[OwnerIdx][BoxIdx] != nullptr)
 			{
-				UE_LOG(LogTemp, Warning, 
-					TEXT("[GameMode] Duplicate box! Player %d, Box %d already registered"),
-					OwnerIdx, BoxIdx);
+				UE_LOG(LogTemp, Warning,
+					TEXT("[GameMode] Duplicate box! Player %d, Box %d"), OwnerIdx, BoxIdx);
 			}
 			RegisteredBoxes[OwnerIdx][BoxIdx] = Box;
 			UE_LOG(LogTemp, Log, TEXT("[GameMode] Registered box: Player %d, Box %d -> %s"),
 				   OwnerIdx, BoxIdx, *Box->GetName());
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, 
-				TEXT("[GameMode] Box %s has invalid indices: Player=%d, Box=%d"),
-				*Box->GetName(), OwnerIdx, BoxIdx);
 		}
 	}
 }
@@ -112,9 +137,15 @@ int32 AKrakenGameMode::GetEffectivePlayerCount() const
 {
 	if (bDebugMode)
 	{
-		return DebugPlayerCount;
+		// 실제 접속자가 DebugPlayerCount 이상이면 실제 수를 사용
+		return FMath::Max(DebugPlayerCount, PlayerControllers.Num());
 	}
 	return PlayerControllers.Num();
+}
+
+int32 AKrakenGameMode::GetPlayerIndex(APlayerController* PC) const
+{
+	return PlayerControllers.IndexOfByKey(PC);
 }
 
 // ============================================================================
@@ -131,10 +162,9 @@ void AKrakenGameMode::PostLogin(APlayerController* NewPlayer)
 	{
 		const int32 NewIndex = PlayerControllers.Num() - 1;
 		PS->PlayerIndex = NewIndex;
+		UE_LOG(LogTemp, Log, TEXT("[GameMode] Player logged in. Total: %d, Index: %d"),
+			   PlayerControllers.Num(), NewIndex);
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("[GameMode] Player logged in. Total: %d"), 
-		   PlayerControllers.Num());
 }
 
 void AKrakenGameMode::Logout(AController* Exiting)
@@ -148,21 +178,29 @@ void AKrakenGameMode::Logout(AController* Exiting)
 }
 
 // ============================================================================
+// 콘솔 명령
+// ============================================================================
+
+// PlayerController의 Exec에서 호출됨
+// (GameMode에 직접 Exec를 붙일 수 없으므로 PC를 경유)
+
+// ============================================================================
 // 게임 흐름
 // ============================================================================
 
 void AKrakenGameMode::StartGame()
 {
 	const int32 PlayerCount = GetEffectivePlayerCount();
-	
+
+	// 최소 인원 체크 (디버그 모드가 아닐 때)
 	if (!bDebugMode && PlayerCount < 4)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[GameMode] Not enough players. Need 4, have %d"), PlayerCount);
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[GameMode] ===== GAME START ===== EffectivePlayers: %d (Debug: %s)"),
-		   PlayerCount, bDebugMode ? TEXT("ON") : TEXT("OFF"));
+	UE_LOG(LogTemp, Log, TEXT("[GameMode] ===== GAME START ===== EffectivePlayers: %d, RealPlayers: %d, Debug: %s"),
+		   PlayerCount, PlayerControllers.Num(), bDebugMode ? TEXT("ON") : TEXT("OFF"));
 
 	TotalTreasureCount = PlayerCount;
 	RevealedTreasureCount = 0;
@@ -317,20 +355,12 @@ void AKrakenGameMode::BeginRevealPhase()
 		RevealedTreasureCount++;
 	}
 
-	// 실제 ExplorationBox 비주얼 업데이트
 	AExplorationBox* Box = FindBox(PendingTargetPlayerIndex, PendingBoxIndex);
 	if (Box)
 	{
 		Box->RevealBox(RevealedCard);
-		UE_LOG(LogTemp, Log, TEXT("[GameMode] Box visual updated: %s"), *Box->GetName());
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[GameMode] Box actor not found: Player %d, Box %d"),
-			   PendingTargetPlayerIndex, PendingBoxIndex);
 	}
 
-	// GameState에 기록
 	FRevealedCardInfo RevealInfo;
 	RevealInfo.RevealerPlayerIndex = CurrentActionHolderIndex;
 	RevealInfo.TargetPlayerIndex = PendingTargetPlayerIndex;
@@ -344,7 +374,6 @@ void AKrakenGameMode::BeginRevealPhase()
 		KrakenGS->AddRevealedCard(RevealInfo);
 	}
 
-	// 승리 조건 체크
 	const EWinCondition WinResult = CheckWinCondition();
 	if (WinResult != EWinCondition::None)
 	{
@@ -352,7 +381,6 @@ void AKrakenGameMode::BeginRevealPhase()
 		return;
 	}
 
-	// 다음 턴
 	CurrentActionHolderIndex = PendingTargetPlayerIndex;
 	CurrentTurnInRound++;
 	PendingTargetPlayerIndex = -1;
@@ -420,7 +448,6 @@ void AKrakenGameMode::BeginGameOverPhase(EWinCondition WinResult)
 		}
 	}
 
-	// 디버그: 남은 카드도 전부 공개
 	if (bDebugMode)
 	{
 		for (int32 p = 0; p < PlayerCards.Num(); p++)
@@ -430,10 +457,7 @@ void AKrakenGameMode::BeginGameOverPhase(EWinCondition WinResult)
 				if (!PlayerCardRevealed[p][b])
 				{
 					AExplorationBox* Box = FindBox(p, b);
-					if (Box)
-					{
-						Box->RevealBox(PlayerCards[p][b]);
-					}
+					if (Box) Box->RevealBox(PlayerCards[p][b]);
 				}
 			}
 		}
@@ -447,7 +471,6 @@ void AKrakenGameMode::BeginGameOverPhase(EWinCondition WinResult)
 void AKrakenGameMode::AssignRoles()
 {
 	const int32 PlayerCount = GetEffectivePlayerCount();
-
 	int32 CrewCount = 0;
 	int32 KrakenCount = 0;
 	GetRoleCountsForPlayerCount(PlayerCount, CrewCount, KrakenCount);
@@ -488,7 +511,6 @@ void AKrakenGameMode::AssignRoles()
 void AKrakenGameMode::CreateAndShuffleCards()
 {
 	const int32 PlayerCount = GetEffectivePlayerCount();
-
 	int32 EmptyCount = 0;
 	int32 TreasureCount = 0;
 	int32 KrakenCardCount = 0;
@@ -542,10 +564,7 @@ void AKrakenGameMode::DistributeCards()
 		if (PlayerControllers.IsValidIndex(p))
 		{
 			AKrakenPlayerState* PS = PlayerControllers[p]->GetPlayerState<AKrakenPlayerState>();
-			if (PS)
-			{
-				PS->SetRemainingBoxCount(CardsPerPlayer);
-			}
+			if (PS) PS->SetRemainingBoxCount(CardsPerPlayer);
 		}
 	}
 
@@ -608,8 +627,6 @@ void AKrakenGameMode::CollectAndRedistributeCards()
 			if (PS) PS->SetRemainingBoxCount(CardsPerPlayer);
 		}
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("[GameMode] Redistributed: %d per player"), CardsPerPlayer);
 }
 
 // ============================================================================
@@ -625,8 +642,11 @@ void AKrakenGameMode::HandleBoxSelectionRequest(APlayerController* RequestingPla
 		return;
 	}
 
-	const int32 RequesterIndex = PlayerControllers.IndexOfByKey(RequestingPlayer);
-	if (!bDebugMode && RequesterIndex == TargetPlayerIndex)
+	const int32 RequesterIndex = GetPlayerIndex(RequestingPlayer);
+
+	// 자기 상자 선택 불가 (단, 디버그 모드에서 혼자 플레이 시에만 허용)
+	const bool bSoloDebug = bDebugMode && (PlayerControllers.Num() == 1);
+	if (!bSoloDebug && RequesterIndex == TargetPlayerIndex)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[GameMode] Rejected: Cannot select own card"));
 		return;
@@ -635,8 +655,8 @@ void AKrakenGameMode::HandleBoxSelectionRequest(APlayerController* RequestingPla
 	if (!PlayerCards.IsValidIndex(TargetPlayerIndex) ||
 		!PlayerCards[TargetPlayerIndex].IsValidIndex(BoxIndex))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[GameMode] Rejected: Invalid indices (Player=%d, Box=%d, MaxPlayer=%d)"),
-			   TargetPlayerIndex, BoxIndex, PlayerCards.Num());
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] Rejected: Invalid indices (Player=%d, Box=%d)"),
+			   TargetPlayerIndex, BoxIndex);
 		return;
 	}
 
@@ -655,10 +675,11 @@ void AKrakenGameMode::HandleBoxSelectionRequest(APlayerController* RequestingPla
 		KrakenGS->SetPendingSelection(TargetPlayerIndex, BoxIndex);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[GameMode] Box selected: Player %d, Box %d"), 
-		   TargetPlayerIndex, BoxIndex);
+	UE_LOG(LogTemp, Log, TEXT("[GameMode] Box selected: Player %d, Box %d (by Player %d)"),
+		   TargetPlayerIndex, BoxIndex, RequesterIndex);
 
-	if (bDebugMode)
+	// 솔로 디버그: 즉시 확정
+	if (bSoloDebug)
 	{
 		GetWorldTimerManager().ClearTimer(DiscussionTimerHandle);
 		TransitionToPhase(EKrakenGamePhase::Reveal);
@@ -681,12 +702,13 @@ void AKrakenGameMode::HandleConfirmReveal(APlayerController* RequestingPlayer)
 
 bool AKrakenGameMode::IsCurrentActionHolder(APlayerController* Player) const
 {
+	// 솔로 디버그: 항상 허용
 	if (bDebugMode && PlayerControllers.Num() == 1)
 	{
 		return true;
 	}
 
-	const int32 PlayerIndex = PlayerControllers.IndexOfByKey(Player);
+	const int32 PlayerIndex = GetPlayerIndex(Player);
 	return PlayerIndex == CurrentActionHolderIndex;
 }
 
@@ -710,10 +732,6 @@ EWinCondition AKrakenGameMode::CheckWinCondition() const
 	return EWinCondition::None;
 }
 
-// ============================================================================
-// 타이머
-// ============================================================================
-
 void AKrakenGameMode::OnDiscussionTimeExpired()
 {
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Discussion time expired!"));
@@ -732,12 +750,13 @@ void AKrakenGameMode::OnDiscussionTimeExpired()
 // 헬퍼
 // ============================================================================
 
-void AKrakenGameMode::GetRoleCountsForPlayerCount(int32 PlayerCount, 
+void AKrakenGameMode::GetRoleCountsForPlayerCount(int32 PlayerCount,
 	int32& OutCrewCount, int32& OutKrakenCount) const
 {
-	// 보드게임 공식 규칙 기반
 	switch (PlayerCount)
 	{
+	case 2:  OutCrewCount = 1; OutKrakenCount = 1; break; // 테스트용
+	case 3:  OutCrewCount = 2; OutKrakenCount = 1; break; // 테스트용
 	case 4:  OutCrewCount = 3; OutKrakenCount = 1; break;
 	case 5:  OutCrewCount = 3; OutKrakenCount = 2; break;
 	case 6:  OutCrewCount = 4; OutKrakenCount = 2; break;
@@ -747,10 +766,9 @@ void AKrakenGameMode::GetRoleCountsForPlayerCount(int32 PlayerCount,
 	}
 }
 
-void AKrakenGameMode::GetCardCountsForPlayerCount(int32 PlayerCount, 
+void AKrakenGameMode::GetCardCountsForPlayerCount(int32 PlayerCount,
 	int32& OutEmptyCount, int32& OutTreasureCount, int32& OutKrakenCount) const
 {
-	// 총 카드 = 플레이어수 × 5, 보물 = 플레이어수, 크라켄 = 1
 	const int32 TotalCards = PlayerCount * 5;
 	OutTreasureCount = PlayerCount;
 	OutKrakenCount = 1;

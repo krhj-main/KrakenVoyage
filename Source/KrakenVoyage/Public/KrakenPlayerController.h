@@ -23,21 +23,31 @@ protected:
 public:
 
 	// ========================================================================
-	// HUD 위젯
+	// HUD
 	// ========================================================================
 
-	// 블루프린트에서 만든 위젯 클래스를 여기에 할당
-	// BP_KrakenPlayerController의 디테일에서 WBP_HUD를 지정
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<UKrakenHUDWidget> HUDWidgetClass;
 
-	// 생성된 위젯 인스턴스
 	UPROPERTY(BlueprintReadOnly, Category = "UI")
 	UKrakenHUDWidget* HUDWidget = nullptr;
 
-	// HUD 생성 및 표시
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void CreateHUD();
+
+	// ========================================================================
+	// 콘솔 명령 (` 키로 콘솔 열고 입력)
+	// ========================================================================
+	// UFUNCTION(Exec)는 PlayerController에서만 사용 가능
+	// 콘솔에서 함수명을 직접 입력하면 실행됨
+
+	// 콘솔: "StartKrakenGame" → 게임 시작
+	UFUNCTION(Exec)
+	void StartKrakenGame();
+
+	// 콘솔: "ConfirmReveal" → 상자 선택 확정
+	UFUNCTION(Exec)
+	void ConfirmReveal();
 
 	// ========================================================================
 	// Server RPC
@@ -99,4 +109,8 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category = "My Info")
 	EPlayerRole MyRole = EPlayerRole::None;
+
+	// 내 플레이어 인덱스 (HUD에서 "내 턴인지" 판단에 사용)
+	UFUNCTION(BlueprintCallable, Category = "My Info")
+	int32 GetMyPlayerIndex() const;
 };

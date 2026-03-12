@@ -84,9 +84,9 @@ protected:
 	FString GetPhaseDisplayName(EKrakenGamePhase Phase) const;
 
 	// 헬퍼: 텍스트 + 색상 + Visibility를 한번에 설정
-	void SetTextSafe(UTextBlock* TextBlock, const FString& InText,
-		FLinearColor Color = FLinearColor::White,
-		ESlateVisibility InVisibility = ESlateVisibility::HitTestInvisible);
+	void SetTextSafe(UTextBlock* TextBlock, const FString& InText, 
+					 FLinearColor Color = FLinearColor::White,
+					 ESlateVisibility InVisibility = ESlateVisibility::HitTestInvisible);
 
 	UPROPERTY()
 	AKrakenPlayerController* CachedPC = nullptr;

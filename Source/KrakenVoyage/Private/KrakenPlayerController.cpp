@@ -13,39 +13,57 @@ void AKrakenPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 로컬 플레이어에게만 HUD 생성 (서버의 다른 플레이어 컨트롤러에서는 생성하지 않음)
 	if (IsLocalController())
 	{
 		CreateHUD();
 	}
 }
 
-// ============================================================================
-// HUD 관리
-// ============================================================================
-
 void AKrakenPlayerController::CreateHUD()
 {
 	if (!HUDWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[PC] HUDWidgetClass is not set! Assign it in the Blueprint."));
+		UE_LOG(LogTemp, Warning, TEXT("[PC] HUDWidgetClass is not set!"));
 		return;
 	}
+	if (HUDWidget) return;
 
-	if (HUDWidget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[PC] HUD already exists."));
-		return;
-	}
-
-	// 위젯 생성 및 뷰포트에 추가
-	// CreateWidget<위젯클래스>(소유자, 위젯 블루프린트 클래스)
 	HUDWidget = CreateWidget<UKrakenHUDWidget>(this, HUDWidgetClass);
 	if (HUDWidget)
 	{
 		HUDWidget->AddToViewport(0);
-		UE_LOG(LogTemp, Log, TEXT("[PC] HUD Widget created and added to viewport."));
+		UE_LOG(LogTemp, Log, TEXT("[PC] HUD created."));
 	}
+}
+
+// ============================================================================
+// 콘솔 명령
+// ============================================================================
+
+void AKrakenPlayerController::StartKrakenGame()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PC] Console: StartKrakenGame"));
+	ServerRequestStartGame();
+}
+
+void AKrakenPlayerController::ConfirmReveal()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PC] Console: ConfirmReveal"));
+	ServerConfirmReveal();
+}
+
+// ============================================================================
+// GetMyPlayerIndex
+// ============================================================================
+
+int32 AKrakenPlayerController::GetMyPlayerIndex() const
+{
+	AKrakenPlayerState* KPS = GetPlayerState<AKrakenPlayerState>();
+	if (KPS)
+	{
+		return KPS->PlayerIndex;
+	}
+	return -1;
 }
 
 // ============================================================================
@@ -83,21 +101,11 @@ void AKrakenPlayerController::ServerToggleReady_Implementation()
 	if (KPS)
 	{
 		KPS->SetReady(!KPS->bIsReady);
-		const bool bReady = KPS->bIsReady;
-		UE_LOG(LogTemp, Log, TEXT("[Lobby] Player %s ready: %s"), 
-			   *KPS->GetPlayerName(), bReady ? TEXT("YES") : TEXT("NO"));
 	}
 }
 
 void AKrakenPlayerController::ServerRequestStartGame_Implementation()
 {
-	AKrakenPlayerState* KPS = GetPlayerState<AKrakenPlayerState>();
-	if (KPS && KPS->PlayerIndex != 0)
-	{
-		ClientReceiveNotification(TEXT("Only the host can start the game."));
-		return;
-	}
-
 	AKrakenGameMode* GM = GetWorld()->GetAuthGameMode<AKrakenGameMode>();
 	if (GM)
 	{
@@ -123,7 +131,6 @@ void AKrakenPlayerController::ClientReceiveCardInfo_Implementation(
 void AKrakenPlayerController::ClientReceiveRole_Implementation(EPlayerRole InNewRole)
 {
 	MyRole = InNewRole;
-
 	const TCHAR* RoleName = (InNewRole == EPlayerRole::Crew) ? TEXT("CREW") : TEXT("KRAKEN");
 	UE_LOG(LogTemp, Log, TEXT("[Client] My role: %s"), RoleName);
 }
