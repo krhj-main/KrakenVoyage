@@ -7,6 +7,7 @@
 #include "KrakenTypes.h"
 #include "KrakenPlayerController.generated.h"
 
+class UKrakenHUDWidget;
 
 UCLASS()
 class KRAKENVOYAGE_API AKrakenPlayerController : public APlayerController
@@ -22,7 +23,24 @@ protected:
 public:
 
 	// ========================================================================
-	// Server RPC (클라이언트 → 서버)
+	// HUD 위젯
+	// ========================================================================
+
+	// 블루프린트에서 만든 위젯 클래스를 여기에 할당
+	// BP_KrakenPlayerController의 디테일에서 WBP_HUD를 지정
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<UKrakenHUDWidget> HUDWidgetClass;
+
+	// 생성된 위젯 인스턴스
+	UPROPERTY(BlueprintReadOnly, Category = "UI")
+	UKrakenHUDWidget* HUDWidget = nullptr;
+
+	// HUD 생성 및 표시
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void CreateHUD();
+
+	// ========================================================================
+	// Server RPC
 	// ========================================================================
 
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Game Actions")
@@ -41,14 +59,12 @@ public:
 	void ServerRequestStartGame();
 
 	// ========================================================================
-	// Client RPC (서버 → 이 클라이언트만)
+	// Client RPC
 	// ========================================================================
 
 	UFUNCTION(Client, Reliable)
 	void ClientReceiveCardInfo(int32 EmptyCount, int32 TreasureCount, bool bHasKraken);
 
-	// 매개변수명 주의: AActor에 이미 'Role'이라는 멤버가 있어서
-	// shadowing 에러가 발생하므로 반드시 다른 이름을 사용
 	UFUNCTION(Client, Reliable)
 	void ClientReceiveRole(EPlayerRole InNewRole);
 
@@ -59,7 +75,7 @@ public:
 	void ClientReceiveNotification(const FString& Message);
 
 	// ========================================================================
-	// Multicast RPC (서버 → 모든 클라이언트)
+	// Multicast RPC
 	// ========================================================================
 
 	UFUNCTION(NetMulticast, Reliable)
@@ -69,7 +85,7 @@ public:
 	void MulticastChatMessage(const FString& SenderName, const FString& Message);
 
 	// ========================================================================
-	// 로컬 클라이언트 상태 (복제되지 않음)
+	// 로컬 상태
 	// ========================================================================
 
 	UPROPERTY(BlueprintReadOnly, Category = "My Cards")

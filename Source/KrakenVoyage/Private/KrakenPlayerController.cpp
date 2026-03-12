@@ -3,6 +3,7 @@
 #include "KrakenPlayerController.h"
 #include "KrakenGameMode.h"
 #include "KrakenPlayerState.h"
+#include "KrakenHUDWidget.h"
 
 AKrakenPlayerController::AKrakenPlayerController()
 {
@@ -11,10 +12,44 @@ AKrakenPlayerController::AKrakenPlayerController()
 void AKrakenPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 로컬 플레이어에게만 HUD 생성 (서버의 다른 플레이어 컨트롤러에서는 생성하지 않음)
+	if (IsLocalController())
+	{
+		CreateHUD();
+	}
 }
 
 // ============================================================================
-// Server RPC 구현
+// HUD 관리
+// ============================================================================
+
+void AKrakenPlayerController::CreateHUD()
+{
+	if (!HUDWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PC] HUDWidgetClass is not set! Assign it in the Blueprint."));
+		return;
+	}
+
+	if (HUDWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PC] HUD already exists."));
+		return;
+	}
+
+	// 위젯 생성 및 뷰포트에 추가
+	// CreateWidget<위젯클래스>(소유자, 위젯 블루프린트 클래스)
+	HUDWidget = CreateWidget<UKrakenHUDWidget>(this, HUDWidgetClass);
+	if (HUDWidget)
+	{
+		HUDWidget->AddToViewport(0);
+		UE_LOG(LogTemp, Log, TEXT("[PC] HUD Widget created and added to viewport."));
+	}
+}
+
+// ============================================================================
+// Server RPC
 // ============================================================================
 
 void AKrakenPlayerController::ServerSelectBox_Implementation(int32 TargetPlayerIndex, int32 BoxIndex)
@@ -38,9 +73,7 @@ void AKrakenPlayerController::ServerConfirmReveal_Implementation()
 void AKrakenPlayerController::ServerSendChatMessage_Implementation(const FString& Message)
 {
 	const FString SenderName = PlayerState ? PlayerState->GetPlayerName() : TEXT("Unknown");
-	
 	UE_LOG(LogTemp, Log, TEXT("[Chat] %s: %s"), *SenderName, *Message);
-
 	MulticastChatMessage(SenderName, Message);
 }
 
@@ -50,7 +83,6 @@ void AKrakenPlayerController::ServerToggleReady_Implementation()
 	if (KPS)
 	{
 		KPS->SetReady(!KPS->bIsReady);
-
 		const bool bReady = KPS->bIsReady;
 		UE_LOG(LogTemp, Log, TEXT("[Lobby] Player %s ready: %s"), 
 			   *KPS->GetPlayerName(), bReady ? TEXT("YES") : TEXT("NO"));
@@ -74,7 +106,7 @@ void AKrakenPlayerController::ServerRequestStartGame_Implementation()
 }
 
 // ============================================================================
-// Client RPC 구현
+// Client RPC
 // ============================================================================
 
 void AKrakenPlayerController::ClientReceiveCardInfo_Implementation(
@@ -92,7 +124,6 @@ void AKrakenPlayerController::ClientReceiveRole_Implementation(EPlayerRole InNew
 {
 	MyRole = InNewRole;
 
-	// enum class 비교를 UE_LOG 밖에서 수행 (매크로 내부 삼항연산자 충돌 방지)
 	const TCHAR* RoleName = (InNewRole == EPlayerRole::Crew) ? TEXT("CREW") : TEXT("KRAKEN");
 	UE_LOG(LogTemp, Log, TEXT("[Client] My role: %s"), RoleName);
 }
@@ -109,7 +140,7 @@ void AKrakenPlayerController::ClientReceiveNotification_Implementation(const FSt
 }
 
 // ============================================================================
-// Multicast RPC 구현
+// Multicast RPC
 // ============================================================================
 
 void AKrakenPlayerController::MulticastOnBoxRevealed_Implementation(
