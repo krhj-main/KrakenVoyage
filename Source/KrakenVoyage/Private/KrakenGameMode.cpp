@@ -40,7 +40,7 @@ void AKrakenGameMode::BeginPlay()
 // ============================================================================
 // ChoosePlayerStart - 플레이어를 순서대로 다른 위치에 스폰
 // ============================================================================
-AActor* AKrakenGameMode::ChoosePlayerStart_Implementation(AController* Player, const FString& IncomingName)
+AActor* AKrakenGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	// 레벨의 모든 PlayerStart를 찾아서 캐싱
 	if (PlayerStartActors.Num() == 0)
