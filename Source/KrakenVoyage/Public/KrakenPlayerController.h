@@ -8,6 +8,7 @@
 #include "KrakenPlayerController.generated.h"
 
 class UKrakenHUDWidget;
+class ULobbyWidget;
 
 UCLASS()
 class KRAKENVOYAGE_API AKrakenPlayerController : public APlayerController
@@ -23,29 +24,41 @@ protected:
 public:
 
 	// ========================================================================
-	// HUD
+	// UI 위젯
 	// ========================================================================
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<UKrakenHUDWidget> HUDWidgetClass;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<ULobbyWidget> LobbyWidgetClass;
+
 	UPROPERTY(BlueprintReadOnly, Category = "UI")
 	UKrakenHUDWidget* HUDWidget = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "UI")
+	ULobbyWidget* LobbyWidget = nullptr;
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void CreateHUD();
 
-	// ========================================================================
-	// 콘솔 명령 (` 키로 콘솔 열고 입력)
-	// ========================================================================
-	// UFUNCTION(Exec)는 PlayerController에서만 사용 가능
-	// 콘솔에서 함수명을 직접 입력하면 실행됨
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void CreateLobbyWidget();
 
-	// 콘솔: "StartKrakenGame" → 게임 시작
+	// 로비 → 게임 전환 시 위젯 교체
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowGameHUD();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowLobby();
+
+	// ========================================================================
+	// 콘솔 명령
+	// ========================================================================
+
 	UFUNCTION(Exec)
 	void StartKrakenGame();
 
-	// 콘솔: "ConfirmReveal" → 상자 선택 확정
 	UFUNCTION(Exec)
 	void ConfirmReveal();
 
@@ -84,6 +97,10 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientReceiveNotification(const FString& Message);
 
+	// 게임이 시작되면 서버가 이 RPC를 호출하여 로비→HUD 전환
+	UFUNCTION(Client, Reliable)
+	void ClientOnGameStarted();
+
 	// ========================================================================
 	// Multicast RPC
 	// ========================================================================
@@ -110,7 +127,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "My Info")
 	EPlayerRole MyRole = EPlayerRole::None;
 
-	// 내 플레이어 인덱스 (HUD에서 "내 턴인지" 판단에 사용)
 	UFUNCTION(BlueprintCallable, Category = "My Info")
 	int32 GetMyPlayerIndex() const;
 };

@@ -202,6 +202,16 @@ void AKrakenGameMode::StartGame()
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] ===== GAME START ===== EffectivePlayers: %d, RealPlayers: %d, Debug: %s"),
 		   PlayerCount, PlayerControllers.Num(), bDebugMode ? TEXT("ON") : TEXT("OFF"));
 
+	// 모든 플레이어에게 로비→HUD 전환 알림
+	for (int32 i = 0; i < PlayerControllers.Num(); i++)
+	{
+		AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(PlayerControllers[i]);
+		if (KPC)
+		{
+			KPC->ClientOnGameStarted();
+		}
+	}
+
 	TotalTreasureCount = PlayerCount;
 	RevealedTreasureCount = 0;
 	CurrentRound = 1;

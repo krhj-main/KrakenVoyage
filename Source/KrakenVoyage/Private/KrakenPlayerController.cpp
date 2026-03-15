@@ -4,6 +4,7 @@
 #include "KrakenGameMode.h"
 #include "KrakenPlayerState.h"
 #include "KrakenHUDWidget.h"
+#include "LobbyWidget.h"
 
 AKrakenPlayerController::AKrakenPlayerController()
 {
@@ -15,18 +16,29 @@ void AKrakenPlayerController::BeginPlay()
 
 	if (IsLocalController())
 	{
-		CreateHUD();
+		// 디버그 모드 자동시작이면 HUD 바로 표시
+		// 아니면 로비 위젯 먼저 표시
+		AKrakenGameMode* GM = GetWorld()->GetAuthGameMode<AKrakenGameMode>();
+		const bool bAutoStart = GM && GM->bDebugMode && GM->bAutoStartGame;
+
+		if (bAutoStart)
+		{
+			CreateHUD();
+		}
+		else
+		{
+			CreateLobbyWidget();
+		}
 	}
 }
 
+// ============================================================================
+// UI 관리
+// ============================================================================
+
 void AKrakenPlayerController::CreateHUD()
 {
-	if (!HUDWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[PC] HUDWidgetClass is not set!"));
-		return;
-	}
-	if (HUDWidget) return;
+	if (!HUDWidgetClass || HUDWidget) return;
 
 	HUDWidget = CreateWidget<UKrakenHUDWidget>(this, HUDWidgetClass);
 	if (HUDWidget)
@@ -34,6 +46,54 @@ void AKrakenPlayerController::CreateHUD()
 		HUDWidget->AddToViewport(0);
 		UE_LOG(LogTemp, Log, TEXT("[PC] HUD created."));
 	}
+}
+
+void AKrakenPlayerController::CreateLobbyWidget()
+{
+	if (!LobbyWidgetClass || LobbyWidget) return;
+
+	LobbyWidget = CreateWidget<ULobbyWidget>(this, LobbyWidgetClass);
+	if (LobbyWidget)
+	{
+		LobbyWidget->AddToViewport(0);
+
+		// 로비에서는 마우스 커서 보이게 + UI 클릭 가능
+		bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(InputMode);
+
+		UE_LOG(LogTemp, Log, TEXT("[PC] Lobby widget created."));
+	}
+}
+
+void AKrakenPlayerController::ShowGameHUD()
+{
+	// 로비 숨기고 HUD 표시
+	if (LobbyWidget)
+	{
+		LobbyWidget->RemoveFromParent();
+		LobbyWidget = nullptr;
+	}
+
+	// 게임 중에는 마우스 숨기고 게임 입력 모드
+	bShowMouseCursor = false;
+	FInputModeGameOnly InputMode;
+	SetInputMode(InputMode);
+
+	CreateHUD();
+}
+
+void AKrakenPlayerController::ShowLobby()
+{
+	// HUD 숨기고 로비 표시
+	if (HUDWidget)
+	{
+		HUDWidget->RemoveFromParent();
+		HUDWidget = nullptr;
+	}
+
+	CreateLobbyWidget();
 }
 
 // ============================================================================
@@ -52,18 +112,10 @@ void AKrakenPlayerController::ConfirmReveal()
 	ServerConfirmReveal();
 }
 
-// ============================================================================
-// GetMyPlayerIndex
-// ============================================================================
-
 int32 AKrakenPlayerController::GetMyPlayerIndex() const
 {
 	AKrakenPlayerState* KPS = GetPlayerState<AKrakenPlayerState>();
-	if (KPS)
-	{
-		return KPS->PlayerIndex;
-	}
-	return -1;
+	return KPS ? KPS->PlayerIndex : -1;
 }
 
 // ============================================================================
@@ -73,44 +125,31 @@ int32 AKrakenPlayerController::GetMyPlayerIndex() const
 void AKrakenPlayerController::ServerSelectBox_Implementation(int32 TargetPlayerIndex, int32 BoxIndex)
 {
 	AKrakenGameMode* GM = GetWorld()->GetAuthGameMode<AKrakenGameMode>();
-	if (GM)
-	{
-		GM->HandleBoxSelectionRequest(this, TargetPlayerIndex, BoxIndex);
-	}
+	if (GM) GM->HandleBoxSelectionRequest(this, TargetPlayerIndex, BoxIndex);
 }
 
 void AKrakenPlayerController::ServerConfirmReveal_Implementation()
 {
 	AKrakenGameMode* GM = GetWorld()->GetAuthGameMode<AKrakenGameMode>();
-	if (GM)
-	{
-		GM->HandleConfirmReveal(this);
-	}
+	if (GM) GM->HandleConfirmReveal(this);
 }
 
 void AKrakenPlayerController::ServerSendChatMessage_Implementation(const FString& Message)
 {
 	const FString SenderName = PlayerState ? PlayerState->GetPlayerName() : TEXT("Unknown");
-	UE_LOG(LogTemp, Log, TEXT("[Chat] %s: %s"), *SenderName, *Message);
 	MulticastChatMessage(SenderName, Message);
 }
 
 void AKrakenPlayerController::ServerToggleReady_Implementation()
 {
 	AKrakenPlayerState* KPS = GetPlayerState<AKrakenPlayerState>();
-	if (KPS)
-	{
-		KPS->SetReady(!KPS->bIsReady);
-	}
+	if (KPS) KPS->SetReady(!KPS->bIsReady);
 }
 
 void AKrakenPlayerController::ServerRequestStartGame_Implementation()
 {
 	AKrakenGameMode* GM = GetWorld()->GetAuthGameMode<AKrakenGameMode>();
-	if (GM)
-	{
-		GM->StartGame();
-	}
+	if (GM) GM->StartGame();
 }
 
 // ============================================================================
@@ -123,8 +162,7 @@ void AKrakenPlayerController::ClientReceiveCardInfo_Implementation(
 	MyEmptyCount = EmptyCount;
 	MyTreasureCount = TreasureCount;
 	bMyHasKraken = bHasKraken;
-
-	UE_LOG(LogTemp, Log, TEXT("[Client] My cards - Empty: %d, Treasure: %d, Kraken: %s"),
+	UE_LOG(LogTemp, Log, TEXT("[Client] Cards - Empty:%d Treasure:%d Kraken:%s"),
 		   EmptyCount, TreasureCount, bHasKraken ? TEXT("YES") : TEXT("NO"));
 }
 
@@ -146,6 +184,12 @@ void AKrakenPlayerController::ClientReceiveNotification_Implementation(const FSt
 	UE_LOG(LogTemp, Log, TEXT("[Notification] %s"), *Message);
 }
 
+void AKrakenPlayerController::ClientOnGameStarted_Implementation()
+{
+	UE_LOG(LogTemp, Log, TEXT("[Client] Game started! Switching to HUD."));
+	ShowGameHUD();
+}
+
 // ============================================================================
 // Multicast RPC
 // ============================================================================
@@ -153,8 +197,8 @@ void AKrakenPlayerController::ClientReceiveNotification_Implementation(const FSt
 void AKrakenPlayerController::MulticastOnBoxRevealed_Implementation(
 	int32 TargetPlayerIndex, int32 BoxIndex, ECardType CardType)
 {
-	UE_LOG(LogTemp, Log, TEXT("[Multicast] Box revealed - Player %d, Box %d, Type: %d"),
-		   TargetPlayerIndex, BoxIndex, static_cast<int32>(CardType));
+	UE_LOG(LogTemp, Log, TEXT("[Multicast] Box revealed - Player %d, Box %d"), 
+		   TargetPlayerIndex, BoxIndex);
 }
 
 void AKrakenPlayerController::MulticastChatMessage_Implementation(
