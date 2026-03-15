@@ -133,6 +133,7 @@ void AExplorationBox::OnRep_bIsRevealed()
 	if (bIsRevealed)
 	{
 		PlayOpenAnimation();
+		UpdateContentVisual(RevealedCardType);
 	}
 }
 
