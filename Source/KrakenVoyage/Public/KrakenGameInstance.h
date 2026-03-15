@@ -63,5 +63,5 @@ public:
 	FString MainMenuMapPath = TEXT("/Game/Maps/L_MainMenu");
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Maps")
-	FString GameMapPath = TEXT("/Game/Maps/L_Ship_Prototype");
+	FString GameMapPath = TEXT("/Game/Maps/L_Shop_Prototype");
 };
