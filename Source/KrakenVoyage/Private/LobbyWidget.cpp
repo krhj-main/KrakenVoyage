@@ -36,9 +36,6 @@ void ULobbyWidget::UpdateLobbyDisplay()
 	AKrakenPlayerController* MyPC = Cast<AKrakenPlayerController>(GetOwningPlayer());
 	if (!MyPC) return;
 
-	// ================================================================
-	// 플레이어 목록 구성
-	// ================================================================
 	FString PlayerListStr;
 	int32 PlayerCount = 0;
 
@@ -49,16 +46,13 @@ void ULobbyWidget::UpdateLobbyDisplay()
 
 		PlayerCount++;
 
-		// 이름
 		FString EntryStr = FString::Printf(TEXT("  %s"), *KPS->GetPlayerName());
 
-		// 호스트 표시 (인덱스 0)
 		if (KPS->PlayerIndex == 0)
 		{
 			EntryStr += TEXT(" (Host)");
 		}
 
-		// 준비 상태
 		if (KPS->bIsReady)
 		{
 			EntryStr += TEXT("  [Ready]");
@@ -78,18 +72,12 @@ void ULobbyWidget::UpdateLobbyDisplay()
 			FString::Printf(TEXT("Players: %d"), PlayerCount)));
 	}
 
-	// ================================================================
-	// 준비 버튼 텍스트
-	// ================================================================
 	if (Text_ReadyLabel)
 	{
 		Text_ReadyLabel->SetText(FText::FromString(
 			bIsReady ? TEXT("Cancel Ready") : TEXT("Ready")));
 	}
 
-	// ================================================================
-	// 시작 버튼 (호스트만 보이게)
-	// ================================================================
 	if (Btn_StartGame)
 	{
 		const int32 MyIndex = MyPC->GetMyPlayerIndex();
@@ -97,9 +85,6 @@ void ULobbyWidget::UpdateLobbyDisplay()
 		Btn_StartGame->SetVisibility(bIsHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
-	// ================================================================
-	// 상태 메시지
-	// ================================================================
 	if (Text_Status)
 	{
 		AKrakenGameState* KGS = Cast<AKrakenGameState>(GS);
@@ -123,8 +108,6 @@ void ULobbyWidget::OnReadyClicked()
 	{
 		MyPC->ServerToggleReady();
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("[Lobby] Ready toggled: %s"), bIsReady ? TEXT("Ready") : TEXT("Not Ready"));
 }
 
 void ULobbyWidget::OnStartGameClicked()
@@ -134,17 +117,14 @@ void ULobbyWidget::OnStartGameClicked()
 	{
 		MyPC->ServerRequestStartGame();
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("[Lobby] Start Game requested."));
 }
 
 void ULobbyWidget::OnLeaveClicked()
 {
+	// Steam 세션도 같이 정리하고 메인 메뉴로 이동
 	UKrakenGameInstance* GI = Cast<UKrakenGameInstance>(GetGameInstance());
 	if (GI)
 	{
-		GI->GoToMainMenu();
+		GI->LeaveSession();
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("[Lobby] Leave clicked."));
 }

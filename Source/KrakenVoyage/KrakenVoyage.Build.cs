@@ -17,7 +17,9 @@ public class KrakenVoyage : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
-			"NetCore"
+			"NetCore",
+			"OnlineSubsystem",        // ★ Steam 세션 관리
+			"OnlineSubsystemUtils"    // ★ 세션 유틸리티
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

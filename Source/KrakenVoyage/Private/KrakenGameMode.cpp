@@ -218,6 +218,14 @@ void AKrakenGameMode::StartGame()
 	CurrentTurnInRound = 0;
 	CurrentActionHolderIndex = 0;
 
+	AKrakenGameState* KrakenGS = GetGameState<AKrakenGameState>();
+	if (KrakenGS)
+	{
+		KrakenGS->TotalTreasureCount = TotalTreasureCount;
+		KrakenGS->MaxRounds = RoomSettings.MaxRounds;
+		KrakenGS->RevealedTreasureCount = 0;
+	}
+
 	AssignRoles();
 	CreateAndShuffleCards();
 	DistributeCards();

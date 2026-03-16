@@ -1,22 +1,4 @@
 // MainMenuWidget.h
-// ============================================================================
-// 메인 메뉴 위젯 - 게임 타이틀 화면
-// ============================================================================
-//
-// 레이아웃:
-//   ┌──────────────────────────────┐
-//   │                              │
-//   │      KRAKEN'S VOYAGE         │
-//   │                              │
-//   │     [ 이름 입력 ]            │
-//   │     [ 방 만들기 ]            │
-//   │     [ 방 참가   ]            │
-//   │     [ 설정      ]            │
-//   │     [ 종료      ]            │
-//   │                              │
-//   └──────────────────────────────┘
-//
-// ============================================================================
 
 #pragma once
 
@@ -27,6 +9,7 @@
 class UButton;
 class UEditableTextBox;
 class UTextBlock;
+class USettingsWidget;
 
 UCLASS()
 class KRAKENVOYAGE_API UMainMenuWidget : public UUserWidget
@@ -37,7 +20,7 @@ public:
 	virtual void NativeConstruct() override;
 
 	// ========================================================================
-	// BindWidget - 블루프린트 위젯과 자동 연결
+	// BindWidget
 	// ========================================================================
 
 	UPROPERTY(meta = (BindWidget))
@@ -58,18 +41,20 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UButton* Btn_Quit;
 
-	// 방 참가 시 IP 입력 패널 (토글로 보이기/숨기기)
 	UPROPERTY(meta = (BindWidgetOptional))
 	UEditableTextBox* Input_IPAddress;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	UButton* Btn_ConnectIP;
 
-protected:
 	// ========================================================================
-	// 버튼 클릭 핸들러
+	// 설정 위젯 클래스 (에디터에서 할당)
 	// ========================================================================
 
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<USettingsWidget> SettingsWidgetClass;
+
+protected:
 	UFUNCTION()
 	void OnHostClicked();
 
@@ -84,4 +69,7 @@ protected:
 
 	UFUNCTION()
 	void OnConnectIPClicked();
+
+	UPROPERTY()
+	USettingsWidget* SettingsWidgetInstance = nullptr;
 };
