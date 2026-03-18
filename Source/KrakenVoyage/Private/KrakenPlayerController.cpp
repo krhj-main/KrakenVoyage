@@ -5,6 +5,7 @@
 #include "KrakenPlayerState.h"
 #include "KrakenHUDWidget.h"
 #include "LobbyWidget.h"
+#include "GameOverWidget.h"
 
 AKrakenPlayerController::AKrakenPlayerController()
 {
@@ -205,4 +206,63 @@ void AKrakenPlayerController::MulticastChatMessage_Implementation(
 	const FString& SenderName, const FString& Message)
 {
 	UE_LOG(LogTemp, Log, TEXT("[MulticastChat] %s: %s"), *SenderName, *Message);
+}
+
+void AKrakenPlayerController::ServerSetTalking_Implementation(bool bNewTalking)
+{
+	AKrakenPlayerState* PS = GetPlayerState<AKrakenPlayerState>();
+	if (PS)
+	{
+		PS->bIsTalking = bNewTalking;
+	}
+}
+
+// ============================================================
+// ★ 게임오버 UI 표시
+// ============================================================
+void AKrakenPlayerController::ClientShowGameOver_Implementation(
+	EWinCondition InWinResult, bool bPlayerWon,
+	const FString& PlayerRolesText,
+	int32 TreasureFound, int32 TreasureTotal,
+	int32 RoundsPlayed, int32 MaxRounds,
+	int32 CardsRevealed)
+{
+	// 기존 HUD의 GameResult 텍스트 대신 전체 화면 오버레이 사용
+
+	if (!GameOverWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PC] GameOverWidgetClass not set!"));
+		return;
+	}
+
+	// 이미 표시 중이면 무시
+	if (GameOverWidget && GameOverWidget->IsInViewport())
+	{
+		return;
+	}
+
+	GameOverWidget = CreateWidget<UGameOverWidget>(this, GameOverWidgetClass);
+	if (GameOverWidget)
+	{
+		GameOverWidget->AddToViewport(20); // HUD(10) 위에 표시
+		GameOverWidget->SetupResult(
+			InWinResult, bPlayerWon,
+			PlayerRolesText,
+			TreasureFound, TreasureTotal,
+			RoundsPlayed, MaxRounds,
+			CardsRevealed);
+
+		// 마우스 커서 활성화 (버튼 클릭 가능하도록)
+		// SetShowMouseCursor: PlayerController의 마우스 표시 설정
+		SetShowMouseCursor(true);
+
+		// FInputModeGameAndUI: 게임 + UI 모두 입력 받는 모드
+		// 캐릭터 이동도 되고 버튼 클릭도 됨
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(InputMode);
+
+		UE_LOG(LogTemp, Log, TEXT("[PC] GameOver widget shown. Won: %s"),
+			bPlayerWon ? TEXT("YES") : TEXT("NO"));
+	}
 }

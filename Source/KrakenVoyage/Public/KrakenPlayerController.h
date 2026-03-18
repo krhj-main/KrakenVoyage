@@ -9,6 +9,7 @@
 
 class UKrakenHUDWidget;
 class ULobbyWidget;
+class UGameOverWidget;
 
 UCLASS()
 class KRAKENVOYAGE_API AKrakenPlayerController : public APlayerController
@@ -129,4 +130,28 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "My Info")
 	int32 GetMyPlayerIndex() const;
+
+	UFUNCTION(Server,Reliable)
+	void ServerSetTalking(bool bNewTalking);
+
+	// ================================================================
+// ★ 게임오버 UI
+// ================================================================
+
+// 에디터에서 WBP_GameOver 할당
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UGameOverWidget> GameOverWidgetClass;
+
+	// 게임오버 UI 인스턴스
+	UPROPERTY()
+	UGameOverWidget* GameOverWidget = nullptr;
+
+	// Client RPC: 서버가 게임 종료 시 호출
+	// → 각 클라이언트에서 게임오버 UI 생성
+	UFUNCTION(Client, Reliable)
+	void ClientShowGameOver(EWinCondition InWinResult, bool bPlayerWon,
+		const FString& PlayerRolesText,
+		int32 TreasureFound, int32 TreasureTotal,
+		int32 RoundsPlayed, int32 MaxRounds,
+		int32 CardsRevealed);
 };

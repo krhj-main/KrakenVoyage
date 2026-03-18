@@ -19,6 +19,8 @@
 
 class UStaticMeshComponent;
 class UBoxComponent;
+class UNiagaraComponent;
+class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBoxOpened, ECardType, RevealedType);
 
@@ -77,6 +79,52 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_RevealedCardType, BlueprintReadOnly, Category = "Box Info")
 	ECardType RevealedCardType = ECardType::Empty;
 
+	// USoundBase: UE5에서 모든 사운드 에셋의 부모 클래스
+	// SoundCue, SoundWave 모두 여기에 할당 가능
+	// EditDefaultsOnly: 블루프린트 Details에서만 설정 가능 (인스턴스별 X)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	USoundBase* Sound_BoxOpen;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	USoundBase* Sound_Empty;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	USoundBase* Sound_Treasure;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	USoundBase* Sound_Kraken;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	USoundBase* Sound_BoxClose;
+
+	// ================================================================
+	// ★ 연출 개선: 이펙트
+	// ================================================================
+
+	// UNiagaraSystem: UE5의 파티클 이펙트 에셋
+	// 보물 발견 시 반짝이 파티클
+	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "FX")
+	UNiagaraSystem* FX_TreasureReveal;
+
+	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "FX")
+	UNiagaraSystem* FX_KrakenReveal;
+
+	// ================================================================
+	// ★ 연출 개선: 부드러운 애니메이션
+	// ================================================================
+
+	// 뚜껑이 열리는 목표 각도 (기본 -110도 = 뒤로 젖혀짐)
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+	float LidOpenAngle = -110.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+	float LidOpenSpeed = 200.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+	float LidCloseSpeed = 300.0f;
+
+
 	// ========================================================================
 	// 서버에서 호출하는 함수
 	// ========================================================================
@@ -104,4 +152,18 @@ protected:
 
 	void PlayOpenAnimation();
 	void UpdateContentVisual(ECardType CardType);
+
+	float CurrentLidAngle = 0.0f;
+	float TargetLidAngle = 0.0f;
+	bool bIsAnimating = false;
+	bool bContentRevealed = false;
+	virtual void Tick(float DeltaTime) override;
+	void PlayOpenAnimationSmooth();
+	void PlayCloseAnimationSmooth();
+
+	// 사운드 재생 헬퍼
+	void PlayRevealSound(ECardType InCardType);
+
+	// 이펙트 생성 헬퍼
+	void SpawnRevealEffect(ECardType InCardType);
 };

@@ -33,6 +33,7 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class AExplorationBox;
+class UVOIPTalker;
 
 // 상호작용 대상이 변경되었을 때 UI 업데이트용 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInteractTargetChanged, AExplorationBox*, NewTarget);
@@ -63,6 +64,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	UCameraComponent* Camera;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Voice")
+	UVOIPTalker* VOIPTalker;
+
 	// ========================================================================
 	// Enhanced Input 에셋 (에디터에서 할당)
 	// ========================================================================
@@ -83,6 +87,12 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	UInputAction* InteractAction;
+
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly, Category = "Input")
+	UInputAction* ConfirmAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	UInputAction* PushToTalkAction;
 
 	// ========================================================================
 	// 상호작용 시스템
@@ -117,6 +127,11 @@ protected:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void StartInteract();
+	void StartConfirm();
+
+	// PTT Start Stop
+	void StartPushToTalk();
+	void StopPushToTalk();
 
 	// ========================================================================
 	// 상호작용 감지 (타이머 기반)

@@ -79,6 +79,15 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Text_GameResult;
 
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* Text_Timer;
+
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* Text_PhaseGuide;
+
+	UPROPERTY(meta = (BindWidgetOoptional))
+	UTextBlock* Text_VoiceIndicator;
+
 protected:
 	void UpdateHUDData();
 	FString GetPhaseDisplayName(EKrakenGamePhase Phase) const;

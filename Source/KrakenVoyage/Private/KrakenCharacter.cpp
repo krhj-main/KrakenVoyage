@@ -8,7 +8,11 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "ExplorationBox.h"
+#include "Net/VoiceConfig.h"
 #include "KrakenPlayerController.h"
+#include "KrakenGameState.h"
+
+
 
 AKrakenCharacter::AKrakenCharacter()
 {
@@ -40,6 +44,10 @@ AKrakenCharacter::AKrakenCharacter()
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
+
+	//VOIPTalker
+	VOIPTalker = CreateDefaultSubobject<UVOIPTalker>(TEXT("VOIPTalker"));
+	
 
 	// ====================================================================
 	// CharacterMovement 설정
@@ -131,6 +139,20 @@ void AKrakenCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		{
 			EnhancedInput->BindAction(InteractAction, ETriggerEvent::Started, 
 									  this, &AKrakenCharacter::StartInteract);
+		}
+
+		if (ConfirmAction)
+		{
+			EnhancedInput->BindAction(ConfirmAction, ETriggerEvent::Started,
+				this, &AKrakenCharacter::StartConfirm);
+		}
+
+		if (PushToTalkAction)
+		{
+			EnhancedInput->BindAction(PushToTalkAction, ETriggerEvent::Started,
+				this, &AKrakenCharacter::StartPushToTalk);
+			EnhancedInput->BindAction(PushToTalkAction, ETriggerEvent::Completed,
+				this, &AKrakenCharacter::StopPushToTalk);
 		}
 	}
 }
@@ -241,4 +263,63 @@ AExplorationBox* AKrakenCharacter::PerformInteractionTrace() const
 	}
 
 	return nullptr;
+}
+
+void AKrakenCharacter::StartConfirm()
+{
+	AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(Controller);
+	if (KPC)
+	{
+		KPC->ServerConfirmReveal();
+		UE_LOG(LogTemp, Log, TEXT("[Character] Confirm pressed -> ServerConfirmReveal"));
+	}
+}
+
+void AKrakenCharacter::StartPushToTalk()
+{
+	// ★ 토론/게임오버 페이즈에서만 말할 수 있음
+	// 다른 페이즈에서는 PTT를 눌러도 무시
+	AKrakenGameState* GS = GetWorld()->GetGameState<AKrakenGameState>();
+	if (GS)
+	{
+		const bool bCanTalk = (GS->CurrentPhase == EKrakenGamePhase::Discussion) || (GS->CurrentPhase == EKrakenGamePhase::GameOver);
+
+		if (!bCanTalk)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("[Voice] Cannot talk in this phase"));
+			return;
+		}
+	}
+	// GetOwner의 PlayerController를 통해 콘솔 명령 실행
+	// "ToggleSpeaking 1" = UE5 내장 명령으로 마이크를 켬
+	// 이 명령은 VOIPTalker가 있는 Pawn에서 자동으로 음성 캡처 시작
+	APlayerController* PC = Cast<APlayerController>(Controller);
+	if (PC)
+	{
+		PC->ConsoleCommand(TEXT("ToggleSpeaking 1"));
+		UE_LOG(LogTemp, Log, TEXT("[Voice] PTT ON"));
+
+		// 서버에 "나 지금 말하는 중" 상태 전달 (UI 표시용)
+		AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(PC);
+		if (KPC)
+		{
+			KPC->ServerSetTalking(true);
+		}
+	}
+}
+
+void AKrakenCharacter::StopPushToTalk()
+{
+	APlayerController* PC = Cast<APlayerController>(Controller);
+	if (PC)
+	{
+		PC->ConsoleCommand(TEXT("ToggleSpeaking 0"));
+		UE_LOG(LogTemp, Log, TEXT("[Voice] PTT OFF"));
+
+		AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(PC);
+		if (KPC)
+		{
+			KPC->ServerSetTalking(false);
+		}
+	}
 }

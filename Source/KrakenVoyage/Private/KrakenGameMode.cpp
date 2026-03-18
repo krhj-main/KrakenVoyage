@@ -9,6 +9,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
+#include "Net/VoiceConfig.h"
 
 AKrakenGameMode::AKrakenGameMode()
 {
@@ -258,6 +259,7 @@ void AKrakenGameMode::TransitionToPhase(EKrakenGamePhase NewPhase)
 
 void AKrakenGameMode::BeginRoleRevealPhase()
 {
+	SetAllPlayersMuted(true);
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Phase: Role Reveal"));
 
 	for (int32 i = 0; i < PlayerControllers.Num(); i++)
@@ -278,6 +280,7 @@ void AKrakenGameMode::BeginRoleRevealPhase()
 
 void AKrakenGameMode::BeginCardCheckPhase()
 {
+	SetAllPlayersMuted(true);
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Phase: Card Check"));
 
 	for (int32 i = 0; i < PlayerControllers.Num(); i++)
@@ -326,6 +329,7 @@ void AKrakenGameMode::BeginCardCheckPhase()
 
 void AKrakenGameMode::BeginDiscussionPhase()
 {
+	SetAllPlayersMuted(false);
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Phase: Discussion (Round %d, Turn %d/%d, ActionHolder: %d)"),
 		   CurrentRound, CurrentTurnInRound + 1, GetEffectivePlayerCount(), CurrentActionHolderIndex);
 
@@ -333,7 +337,13 @@ void AKrakenGameMode::BeginDiscussionPhase()
 	if (KrakenGS)
 	{
 		KrakenGS->SetTurnInfo(CurrentRound, CurrentTurnInRound, CurrentActionHolderIndex);
+
+		KrakenGS->SetPhaseTimer(static_cast<float>(RoomSettings.DiscussionTimeSeconds));
+		KrakenGS->SetPendingSelection(-1,-1);
 	}
+
+	PendingTargetPlayerIndex = -1;
+	PendingBoxIndex = -1;
 
 	GetWorldTimerManager().SetTimer(DiscussionTimerHandle,
 		this, &AKrakenGameMode::OnDiscussionTimeExpired,
@@ -342,6 +352,7 @@ void AKrakenGameMode::BeginDiscussionPhase()
 
 void AKrakenGameMode::BeginRevealPhase()
 {
+	SetAllPlayersMuted(true);
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Phase: Reveal (Target: Player %d, Box %d)"),
 		   PendingTargetPlayerIndex, PendingBoxIndex);
 
@@ -420,6 +431,7 @@ void AKrakenGameMode::BeginRevealPhase()
 
 void AKrakenGameMode::BeginRoundTransitionPhase()
 {
+	SetAllPlayersMuted(true);
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Phase: Round Transition (%d -> %d)"),
 		   CurrentRound, CurrentRound + 1);
 
@@ -443,6 +455,7 @@ void AKrakenGameMode::BeginRoundTransitionPhase()
 
 void AKrakenGameMode::BeginGameOverPhase(EWinCondition WinResult)
 {
+	SetAllPlayersMuted(false);
 	const TCHAR* WinName = TEXT("Unknown");
 	if (WinResult == EWinCondition::CrewFoundAllTreasure) WinName = TEXT("Crew Found All Treasure!");
 	else if (WinResult == EWinCondition::KrakenRevealed) WinName = TEXT("Kraken Revealed!");
@@ -479,6 +492,57 @@ void AKrakenGameMode::BeginGameOverPhase(EWinCondition WinResult)
 				}
 			}
 		}
+	}
+
+	// ★ 게임오버 UI를 위한 데이터 준비
+	// 모든 플레이어의 역할을 문자열로 만듦
+	FString PlayerRolesText;
+	for (int32 Idx = 0; Idx < PlayerControllers.Num(); Idx++)
+	{
+		AKrakenPlayerState* PS = PlayerControllers[Idx]->GetPlayerState<AKrakenPlayerState>();
+		if (PS)
+		{
+			const TCHAR* RoleName = (PS->PlayerRole == EPlayerRole::Kraken)
+				? TEXT("KRAKEN")
+				: TEXT("Crew");
+			PlayerRolesText += FString::Printf(TEXT("Player %d: %s\n"), Idx, RoleName);
+		}
+	}
+
+	// 디버그 모드: 가상 플레이어 역할도 표시
+	// (실제 PlayerController가 없는 가상 플레이어)
+	// → 생략 가능 (멀티에서는 불필요)
+
+	// ★ 각 플레이어에게 Client RPC로 게임오버 UI 전송
+	for (int32 Idx = 0; Idx < PlayerControllers.Num(); Idx++)
+	{
+		AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(PlayerControllers[Idx]);
+		AKrakenPlayerState* PS = PlayerControllers[Idx]->GetPlayerState<AKrakenPlayerState>();
+		if (!KPC || !PS) continue;
+
+		// 이 플레이어가 이겼는지 판단
+		const bool bIsCrew = (PS->PlayerRole == EPlayerRole::Crew);
+		bool bPlayerWon = false;
+
+		if (WinResult == EWinCondition::CrewFoundAllTreasure)
+		{
+			bPlayerWon = bIsCrew;  // 선원 승리 → 선원이면 이김
+		}
+		else // KrakenRevealed 또는 TimeRanOut
+		{
+			bPlayerWon = !bIsCrew; // 크라켄 승리 → 크라켄이면 이김
+		}
+
+		KPC->ClientShowGameOver(
+			WinResult,
+			bPlayerWon,
+			PlayerRolesText,
+			RevealedTreasureCount,
+			TotalTreasureCount,
+			CurrentRound,
+			RoomSettings.MaxRounds,
+			KrakenGS ? KrakenGS->RevealedCards.Num() : 0
+		);
 	}
 }
 
@@ -662,14 +726,7 @@ void AKrakenGameMode::HandleBoxSelectionRequest(APlayerController* RequestingPla
 
 	const int32 RequesterIndex = GetPlayerIndex(RequestingPlayer);
 
-	// 자기 상자 선택 불가 (단, 디버그 모드에서 혼자 플레이 시에만 허용)
-	const bool bSoloDebug = bDebugMode && (PlayerControllers.Num() == 1);
-	if (!bSoloDebug && RequesterIndex == TargetPlayerIndex)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[GameMode] Rejected: Cannot select own card"));
-		return;
-	}
-
+	
 	if (!PlayerCards.IsValidIndex(TargetPlayerIndex) ||
 		!PlayerCards[TargetPlayerIndex].IsValidIndex(BoxIndex))
 	{
@@ -696,12 +753,7 @@ void AKrakenGameMode::HandleBoxSelectionRequest(APlayerController* RequestingPla
 	UE_LOG(LogTemp, Log, TEXT("[GameMode] Box selected: Player %d, Box %d (by Player %d)"),
 		   TargetPlayerIndex, BoxIndex, RequesterIndex);
 
-	// 솔로 디버그: 즉시 확정
-	if (bSoloDebug)
-	{
-		GetWorldTimerManager().ClearTimer(DiscussionTimerHandle);
-		TransitionToPhase(EKrakenGamePhase::Reveal);
-	}
+	
 }
 
 void AKrakenGameMode::HandleConfirmReveal(APlayerController* RequestingPlayer)
@@ -807,4 +859,24 @@ int32 AKrakenGameMode::GetRemainingCardCount(int32 PlayerIndex) const
 		if (!PlayerCardRevealed[PlayerIndex][i]) Count++;
 	}
 	return Count;
+}
+
+void AKrakenGameMode::SetAllPlayersMuted(bool bMute)
+{
+	for (APlayerController* PC : PlayerControllers)
+	{
+		if (!PC) continue;
+
+		AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(PC);
+		if (KPC)
+		{
+			if (bMute)
+			{
+				AKrakenPlayerState* PS = PC->GetPlayerState<AKrakenPlayerState>();
+				if (PS) PS->bIsTalking = false;
+			}
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("[GameMode] Voice %s for all players"),
+		bMute ? TEXT("MUTED") : TEXT("UNMUTED"));
 }

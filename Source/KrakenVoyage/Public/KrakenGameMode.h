@@ -51,6 +51,8 @@ public:
 	AExplorationBox* FindBox(int32 InPlayerIndex, int32 InBoxIndex) const;
 	void ResetAllBoxes();
 
+	void SetAllPlayersMuted(bool bMute);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Room Settings")
 	FRoomSettings RoomSettings;
 

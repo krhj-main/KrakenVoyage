@@ -4,10 +4,14 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 AExplorationBox::AExplorationBox()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 
 	// ====================================================================
 	// Replication 활성화
@@ -107,23 +111,6 @@ void AExplorationBox::RevealBox(ECardType CardType)
 		OnRep_RevealedCardType();
 	}
 }
-
-void AExplorationBox::ResetBox()
-{
-	if (HasAuthority())
-	{
-		bIsRevealed = false;
-		RevealedCardType = ECardType::Empty;
-		ContentMesh->SetVisibility(false);
-
-		// 뚜껑 닫기 (리셋)
-		if (LidPivot)
-		{
-			LidPivot->SetRelativeRotation(FRotator::ZeroRotator);
-		}
-	}
-}
-
 // ============================================================================
 // OnRep 콜백 (클라이언트 비주얼 업데이트)
 // ============================================================================
@@ -152,17 +139,7 @@ void AExplorationBox::OnRep_RevealedCardType()
 
 void AExplorationBox::PlayOpenAnimation()
 {
-	// ====================================================================
-	// 프로토타입: 뚜껑을 즉시 열기 (나중에 Timeline으로 부드럽게)
-	// ====================================================================
-	// Day7의 Door 회전과 동일한 패턴:
-	// LidPivot (Scene Component)을 회전시키면
-	// 자식인 LidMesh도 따라서 회전함
-	if (LidPivot)
-	{
-		// X축 기준으로 -110도 회전 (뒤로 젖혀짐)
-		LidPivot->SetRelativeRotation(FRotator(-110.0f, 0.0f, 0.0f));
-	}
+	PlayOpenAnimationSmooth();
 
 	UE_LOG(LogTemp, Log, TEXT("[ExplorationBox] Box opened! Owner=%d, Index=%d, Type=%d"),
 		   OwnerPlayerIndex, BoxIndex, static_cast<int32>(RevealedCardType));
@@ -199,5 +176,156 @@ void AExplorationBox::UpdateContentVisual(ECardType CardType)
 			DynMat->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.4f, 0.3f, 0.2f));  // 갈색
 			break;
 		}
+	}
+}
+
+void AExplorationBox::PlayOpenAnimationSmooth()
+{
+	TargetLidAngle = LidOpenAngle;
+	bIsAnimating = true;
+	bContentRevealed = false;
+
+	// Tick 활성화 (애니메이션 시작)
+	// SetActorTickEnabled: 해당 액터의 Tick을 켜거나 끄는 함수
+	// 성능을 위해 필요할 때만 Tick 활성화
+	SetActorTickEnabled(true);
+
+	// 뚜껑 열리는 소리 재생
+	if (Sound_BoxOpen)
+	{
+		// PlaySoundAtLocation: 3D 공간의 특정 위치에서 소리 재생
+		// 가까이 있으면 크게, 멀리 있으면 작게 들림
+		UGameplayStatics::PlaySoundAtLocation(
+			this, Sound_BoxOpen, GetActorLocation(), 1.0f, 1.0f);
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Box] Opening smooth: %s"), *GetName());
+}
+
+void AExplorationBox::PlayCloseAnimationSmooth()
+{
+	TargetLidAngle = 0.0f;
+	bIsAnimating = true;
+	bContentRevealed = false;
+	SetActorTickEnabled(true);
+
+	if (Sound_BoxClose)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, Sound_BoxClose, GetActorLocation());
+	}
+}
+
+void AExplorationBox::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (!bIsAnimating || LidPivot) return;
+
+	const float Speed = (TargetLidAngle < CurrentLidAngle) ? LidOpenSpeed : LidCloseSpeed;
+
+	CurrentLidAngle = FMath::FInterpTo(CurrentLidAngle, TargetLidAngle, DeltaTime, Speed / 60.0f);
+
+	FRotator NewRotation = FRotator(CurrentLidAngle, 0.0f, 0.0f);
+	LidPivot->SetRelativeRotation(NewRotation);
+
+	const float RevealThreshold = LidOpenAngle * 0.5f;
+	if (!bContentRevealed && CurrentLidAngle <= RevealThreshold)
+	{
+		bContentRevealed = true;
+
+		PlayRevealSound(RevealedCardType);
+		SpawnRevealEffect(RevealedCardType);
+
+		UpdateContentVisual(RevealedCardType);
+	}
+
+	if (FMath::IsNearlyEqual(CurrentLidAngle, TargetLidAngle, 0.5f))
+	{
+		CurrentLidAngle = TargetLidAngle;
+		bIsAnimating = false;
+
+		SetActorTickEnabled(false);
+
+		UE_LOG(LogTemp, Log, TEXT("[Box] Animation complete: %s (Angle: %.1f)"),
+			*GetName(), CurrentLidAngle);
+	}
+}
+
+void AExplorationBox::PlayRevealSound(ECardType InCardType)
+{
+	USoundBase* SoundToPlay = nullptr;
+
+	switch (InCardType)
+	{
+	case ECardType::Empty:
+		SoundToPlay = Sound_Empty;
+		break;
+	case ECardType::Treasure:
+		SoundToPlay = Sound_Treasure;
+		break;
+	case ECardType::Kraken:
+		SoundToPlay = Sound_Kraken;
+		break;
+	default:
+		break;
+	}
+
+	if (SoundToPlay)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			this, SoundToPlay, GetActorLocation(),
+			1.0f,   // 볼륨
+			1.0f    // 피치
+		);
+	}
+}
+
+// ============================================================
+// ★ 카드 종류별 파티클 이펙트
+// ============================================================
+void AExplorationBox::SpawnRevealEffect(ECardType InCardType)
+{
+	UNiagaraSystem* EffectToSpawn = nullptr;
+
+	if (InCardType == ECardType::Treasure && FX_TreasureReveal)
+	{
+		EffectToSpawn = FX_TreasureReveal;
+	}
+	else if (InCardType == ECardType::Kraken && FX_KrakenReveal)
+	{
+		EffectToSpawn = FX_KrakenReveal;
+	}
+
+	if (EffectToSpawn)
+	{
+		// UNiagaraFunctionLibrary::SpawnSystemAtLocation
+		// 특정 위치에 Niagara 파티클을 일회성으로 스폰
+		// 상자 위치에서 약간 위로 (Z+50) 오프셋
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+			this,
+			EffectToSpawn,
+			GetActorLocation() + FVector(0.0f, 0.0f, 50.0f),  // 상자 위
+			FRotator::ZeroRotator,
+			FVector(1.0f),    // 스케일
+			true,             // bAutoDestroy
+			true              // bAutoActivate
+		);
+	}
+}
+
+// ============================================================
+// ★ 기존 ResetBox 수정 — 부드럽게 닫기
+// ============================================================
+void AExplorationBox::ResetBox()
+{
+	bIsRevealed = false;
+	RevealedCardType = ECardType::Empty;
+
+	// 즉시 닫기 대신 부드러운 닫기
+	PlayCloseAnimationSmooth();
+
+	// ContentMesh 숨기기
+	if (ContentMesh)
+	{
+		ContentMesh->SetVisibility(false);
 	}
 }

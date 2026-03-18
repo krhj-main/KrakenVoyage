@@ -32,6 +32,7 @@ void AKrakenPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(AKrakenPlayerState, bIsReady);
 	DOREPLIFETIME(AKrakenPlayerState, bHasActionMarker);
 	DOREPLIFETIME(AKrakenPlayerState, PlayerIndex);
+	DOREPLIFETIME(AKrakenPlayerState, bIsTalking);
 }
 
 // ============================================================================

@@ -37,6 +37,7 @@ void AKrakenGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AKrakenGameState, PendingSelectionPlayerIndex);
 	DOREPLIFETIME(AKrakenGameState, PendingSelectionBoxIndex);
 	DOREPLIFETIME(AKrakenGameState, DiscussionTimeRemaining);
+	DOREPLIFETIME(AKrakenGameState, PhaseEndTime);
 }
 
 // ============================================================================
@@ -120,4 +121,9 @@ void AKrakenGameState::OnRep_TurnInfo()
 	UE_LOG(LogTemp, Log, TEXT("[GameState] Turn info: Round %d, Turn %d, ActionHolder: %d"),
 		   CurrentRound, CurrentTurnInRound, ActionHolderPlayerIndex);
 	OnTurnInfoUpdated.Broadcast();
+}
+
+void AKrakenGameState::SetPhaseTimer(float DurationSeconds)
+{
+	PhaseEndTime = GetServerWorldTimeSeconds() + DurationSeconds;
 }

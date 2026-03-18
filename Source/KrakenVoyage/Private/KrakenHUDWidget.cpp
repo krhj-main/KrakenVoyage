@@ -29,6 +29,130 @@ void UKrakenHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	UpdateHUDData();
+
+	// ============================================================
+// ★ Phase 5: 보이스 표시
+// ============================================================
+	if (Text_VoiceIndicator)
+	{
+		// 내 PlayerState에서 bIsTalking 확인
+		APlayerController* PC = GetOwningPlayer();
+		if (PC)
+		{
+			AKrakenPlayerState* MyPS = PC->GetPlayerState<AKrakenPlayerState>();
+			if (MyPS && MyPS->bIsTalking)
+			{
+				Text_VoiceIndicator->SetText(FText::FromString(TEXT("MIC ON")));
+				Text_VoiceIndicator->SetColorAndOpacity(
+					FSlateColor(FLinearColor(0.0f, 1.0f, 0.0f))); // 초록색
+				Text_VoiceIndicator->SetVisibility(ESlateVisibility::Visible);
+			}
+			else
+			{
+				Text_VoiceIndicator->SetVisibility(ESlateVisibility::Hidden);
+			}
+		}
+	}
+
+	// ============================================================
+// ★ Phase 6: 토론 타이머 표시
+// ============================================================
+	if (CachedGS && Text_Timer)
+	{
+		if (CachedGS->CurrentPhase == EKrakenGamePhase::Discussion)
+		{
+			// GetServerWorldTimeSeconds: 서버와 동기화된 시간
+			const float Remaining = CachedGS->PhaseEndTime - GetWorld()->GetTimeSeconds();
+			const int32 Seconds = FMath::Max(0, FMath::CeilToInt(Remaining));
+			const int32 Min = Seconds / 60;
+			const int32 Sec = Seconds % 60;
+
+			Text_Timer->SetText(FText::FromString(
+				FString::Printf(TEXT("%d:%02d"), Min, Sec)));
+			Text_Timer->SetVisibility(ESlateVisibility::Visible);
+
+			// 색상: 30초+ 흰색, 10~30 노란색, 10초 미만 빨간색
+			FSlateColor TimerColor;
+			if (Seconds > 30)
+				TimerColor = FSlateColor(FLinearColor::White);
+			else if (Seconds > 10)
+				TimerColor = FSlateColor(FLinearColor(1.0f, 1.0f, 0.0f));
+			else
+			{
+				// 깜빡임
+				const bool bBlink = FMath::Fmod(GetWorld()->GetTimeSeconds(), 1.0f) < 0.5f;
+				TimerColor = bBlink
+					? FSlateColor(FLinearColor::Red)
+					: FSlateColor(FLinearColor(0.5f, 0.0f, 0.0f));
+			}
+			Text_Timer->SetColorAndOpacity(TimerColor);
+		}
+		else
+		{
+			Text_Timer->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
+
+	// ============================================================
+	// ★ Phase 6: 행동 안내 텍스트
+	// ============================================================
+	if (CachedGS && Text_PhaseGuide)
+	{
+		FString GuideStr;
+		FLinearColor GuideColor = FLinearColor::White;
+
+		switch (CachedGS->CurrentPhase)
+		{
+		case EKrakenGamePhase::RoleReveal:
+			GuideStr = TEXT("Your role has been assigned!");
+			GuideColor = FLinearColor(0.0f, 1.0f, 1.0f); // Cyan
+			break;
+
+		case EKrakenGamePhase::CardCheck:
+			GuideStr = TEXT("Memorize your cards!");
+			GuideColor = FLinearColor(0.0f, 1.0f, 1.0f);
+			break;
+
+		case EKrakenGamePhase::Discussion:
+		{
+			int32 MyIndex = CachedPC->GetMyPlayerIndex();
+			const bool bIsMyTurn = (CachedGS->ActionHolderPlayerIndex == MyIndex);
+			if (bIsMyTurn)
+			{
+				if (CachedGS->PendingSelectionPlayerIndex < 0)
+					GuideStr = TEXT("[E] Select a box    |    YOUR TURN");
+				else
+					GuideStr = TEXT("[F] Confirm    |    [E] Change selection");
+				GuideColor = FLinearColor(1.0f, 1.0f, 0.0f); // Yellow
+			}
+			else
+			{
+				GuideStr = FString::Printf(TEXT("Player %d is choosing..."),
+					CachedGS->ActionHolderPlayerIndex);
+				GuideColor = FLinearColor(0.5f, 0.5f, 0.5f); // Gray
+			}
+			break;
+		}
+
+		case EKrakenGamePhase::RoundTransition:
+			GuideStr = TEXT("Cards are being reshuffled...");
+			GuideColor = FLinearColor(1.0f, 1.0f, 0.0f);
+			break;
+
+		case EKrakenGamePhase::GameOver:
+			GuideStr = TEXT("");
+			break;
+
+		default:
+			GuideStr = TEXT("");
+			break;
+		}
+
+		Text_PhaseGuide->SetText(FText::FromString(GuideStr));
+		Text_PhaseGuide->SetColorAndOpacity(FSlateColor(GuideColor));
+		Text_PhaseGuide->SetVisibility(
+			GuideStr.IsEmpty() ? ESlateVisibility::Hidden : ESlateVisibility::Visible);
+	}
 }
 
 void UKrakenHUDWidget::SetTextSafe(UTextBlock* TextBlock, const FString& InText,

@@ -106,6 +106,11 @@ public:
 	void SetWinCondition(EWinCondition Condition);
 	void SetPendingSelection(int32 PlayerIndex, int32 BoxIndex);
 
+	UPROPERTY(Replicated)
+	float PhaseEndTime = 0.0f;
+
+	void SetPhaseTimer(float DurationSeconds);
+
 	// ========================================================================
 	// Getter
 	// ========================================================================

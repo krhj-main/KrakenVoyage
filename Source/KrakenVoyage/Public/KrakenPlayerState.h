@@ -63,6 +63,9 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Info")
 	int32 PlayerIndex = -1;
 
+	UPROPERTY(Replicated,BlueprintReadOnly, Category = "Voice")
+	bool bIsTalking = false;
+
 	// ========================================================================
 	// 서버에서 호출하는 Setter
 	// ========================================================================
