@@ -218,7 +218,7 @@ void AExplorationBox::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!bIsAnimating || LidPivot) return;
+	if (!bIsAnimating || !LidPivot) return;
 
 	const float Speed = (TargetLidAngle < CurrentLidAngle) ? LidOpenSpeed : LidCloseSpeed;
 
