@@ -19,6 +19,10 @@ class KRAKENVOYAGE_API UGameOverWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+
+	virtual void NativeConstruct() override;
+
 	// ================================================================
 	// BindWidget — 블루프린트에서 정확한 이름으로 매칭
 	// ================================================================
