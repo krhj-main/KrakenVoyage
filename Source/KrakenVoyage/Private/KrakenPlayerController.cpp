@@ -6,6 +6,8 @@
 #include "KrakenHUDWidget.h"
 #include "LobbyWidget.h"
 #include "GameOverWidget.h"
+#include "PauseMenuWidget.h"
+#include "ChatWidget.h"
 
 AKrakenPlayerController::AKrakenPlayerController()
 {
@@ -46,6 +48,17 @@ void AKrakenPlayerController::CreateHUD()
 	{
 		HUDWidget->AddToViewport(0);
 		UE_LOG(LogTemp, Log, TEXT("[PC] HUD created."));
+	}
+
+	// ★ 채팅 위젯 생성
+	if (ChatWidgetClass)
+	{
+		ChatWidget = CreateWidget<UChatWidget>(this, ChatWidgetClass);
+		if (ChatWidget)
+		{
+			ChatWidget->AddToViewport(5); // HUD(10)보다 아래
+			UE_LOG(LogTemp, Log, TEXT("[PC] Chat widget created."));
+		}
 	}
 }
 
@@ -135,11 +148,13 @@ void AKrakenPlayerController::ServerConfirmReveal_Implementation()
 	if (GM) GM->HandleConfirmReveal(this);
 }
 
+/*
 void AKrakenPlayerController::ServerSendChatMessage_Implementation(const FString& Message)
 {
 	const FString SenderName = PlayerState ? PlayerState->GetPlayerName() : TEXT("Unknown");
 	MulticastChatMessage(SenderName, Message);
 }
+*/
 
 void AKrakenPlayerController::ServerToggleReady_Implementation()
 {
@@ -264,5 +279,101 @@ void AKrakenPlayerController::ClientShowGameOver_Implementation(
 
 		UE_LOG(LogTemp, Log, TEXT("[PC] GameOver widget shown. Won: %s"),
 			bPlayerWon ? TEXT("YES") : TEXT("NO"));
+	}
+}
+
+void AKrakenPlayerController::TogglePauseMenu()
+{
+	if (bIsPauseMenuOpen)
+	{
+		// 닫기
+		if (PauseMenuWidget)
+		{
+			PauseMenuWidget->RemoveFromParent();
+			PauseMenuWidget = nullptr;
+		}
+		bIsPauseMenuOpen = false;
+
+		SetShowMouseCursor(false);
+		FInputModeGameOnly GameMode;
+		SetInputMode(GameMode);
+	}
+	else
+	{
+		// 열기
+		if (!PauseMenuWidgetClass) return;
+
+		PauseMenuWidget = CreateWidget<UPauseMenuWidget>(this, PauseMenuWidgetClass);
+		if (PauseMenuWidget)
+		{
+			PauseMenuWidget->AddToViewport(20);
+			bIsPauseMenuOpen = true;
+
+			SetShowMouseCursor(true);
+			FInputModeGameAndUI InputMode;
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			SetInputMode(InputMode);
+		}
+	}
+}
+
+// ============================================================
+// ★ 채팅 송수신
+// ============================================================
+
+void AKrakenPlayerController::ServerSendChatMessage_Implementation(const FString & Message)
+{
+	// 서버에서 실행: 발신자 인덱스를 구해서 모든 클라이언트에 전달
+
+	// 메시지 길이 제한 (스팸 방지)
+	FString SafeMessage = Message.Left(200);
+
+	// 내 플레이어 인덱스 가져오기
+	AKrakenPlayerState* PS = GetPlayerState<AKrakenPlayerState>();
+	const int32 SenderIdx = PS ? PS->PlayerIndex : -1;
+
+	UE_LOG(LogTemp, Log, TEXT("[Chat] Player %d: %s"), SenderIdx, *SafeMessage);
+
+	// NetMulticast: 서버 + 모든 클라이언트에서 실행
+	MulticastReceiveChatMessage(SenderIdx, SafeMessage);
+}
+
+void AKrakenPlayerController::MulticastReceiveChatMessage_Implementation(
+	int32 SenderIndex, const FString& Message)
+{
+	// 모든 클라이언트에서 실행: 채팅 위젯에 메시지 추가
+	if (ChatWidget)
+	{
+		ChatWidget->AddChatMessage(SenderIndex, Message);
+	}
+}
+
+
+// ============================================================
+// ★ 채팅 토글 (Enter키)
+// ============================================================
+void AKrakenPlayerController::ToggleChat()
+{
+	if (!ChatWidget) return;
+
+	if (ChatWidget->IsChatFocused())
+	{
+		// 닫기
+		ChatWidget->UnfocusChatInput();
+		SetShowMouseCursor(false);
+		FInputModeGameOnly GameMode;
+		SetInputMode(GameMode);
+		
+	}
+	else
+	{
+		// 열기: 먼저 InputMode 변경 → 그 다음 포커스
+		SetShowMouseCursor(true);
+        FInputModeUIOnly UIMode;
+        UIMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        SetInputMode(UIMode);
+
+        // 포커스를 입력창에 직접 설정
+        ChatWidget->FocusChatInput();
 	}
 }

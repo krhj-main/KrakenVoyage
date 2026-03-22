@@ -10,6 +10,8 @@
 class UKrakenHUDWidget;
 class ULobbyWidget;
 class UGameOverWidget;
+class UPauseMenuWidget;
+class UChatWidget;
 
 UCLASS()
 class KRAKENVOYAGE_API AKrakenPlayerController : public APlayerController
@@ -154,4 +156,34 @@ public:
 		int32 TreasureFound, int32 TreasureTotal,
 		int32 RoundsPlayed, int32 MaxRounds,
 		int32 CardsRevealed);
+
+	// 일시정지 메뉴
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UPauseMenuWidget> PauseMenuWidgetClass;
+
+	UPROPERTY()
+	UPauseMenuWidget* PauseMenuWidget = nullptr;
+
+	bool bIsPauseMenuOpen = false;
+
+	void TogglePauseMenu();
+
+
+	// ================================================================
+	// ★ 텍스트 채팅
+	// ================================================================
+
+	// 에디터에서 WBP_Chat 할당
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UChatWidget> ChatWidgetClass;
+
+	UPROPERTY()
+	UChatWidget* ChatWidget = nullptr;
+
+	// 서버가 모든 클라이언트에 메시지 전달
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastReceiveChatMessage(int32 SenderIndex, const FString& Message);
+
+	// 채팅창 열기/닫기
+	void ToggleChat();
 };

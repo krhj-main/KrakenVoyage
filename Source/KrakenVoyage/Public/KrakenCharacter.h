@@ -118,6 +118,17 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Interaction")
 	FOnInteractTargetChanged OnInteractTargetChanged;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	UInputAction* PauseAction;
+
+	void TogglePause();
+
+	// ★ 채팅 토글 (Enter키)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	UInputAction* ChatAction;
+
+	void ToggleChatInput();
+
 protected:
 
 	// ========================================================================

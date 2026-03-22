@@ -154,6 +154,18 @@ void AKrakenCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 			EnhancedInput->BindAction(PushToTalkAction, ETriggerEvent::Completed,
 				this, &AKrakenCharacter::StopPushToTalk);
 		}
+
+		if (PauseAction)
+		{
+			EnhancedInput->BindAction(PauseAction, ETriggerEvent::Started,
+				this, &AKrakenCharacter::TogglePause);
+		}
+
+		if (ChatAction)
+		{
+			EnhancedInput->BindAction(ChatAction, ETriggerEvent::Started,
+				this, &AKrakenCharacter::ToggleChatInput);
+		}
 	}
 }
 
@@ -321,5 +333,19 @@ void AKrakenCharacter::StopPushToTalk()
 		{
 			KPC->ServerSetTalking(false);
 		}
+	}
+}
+void AKrakenCharacter::TogglePause()
+{
+	AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(Controller);
+	if (KPC) KPC->TogglePauseMenu();
+}
+
+void AKrakenCharacter::ToggleChatInput()
+{
+	AKrakenPlayerController* KPC = Cast<AKrakenPlayerController>(Controller);
+	if (KPC)
+	{
+		KPC->ToggleChat();
 	}
 }
