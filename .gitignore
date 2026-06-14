@@ -1,0 +1,17 @@
+# Unreal 생성 폴더 (빌드 산물 — 커밋 금지)
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+.vs/
+
+# VS 생성 파일
+*.sln
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+
+# OS
+.DS_Store
