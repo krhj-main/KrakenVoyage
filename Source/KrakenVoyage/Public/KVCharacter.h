@@ -42,9 +42,26 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> JumpAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> SprintAction;
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float WalkSpeed = 600.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float SprintSpeed = 1500.f;
+
+
     // TODO: 입력 처리 함수 2개
 	void Move(const FInputActionValue& Value);
 
 	void Look(const FInputActionValue& Value);
+	void StartSprint();
+	void StopSprint();
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetSprinting(bool bNewSprinting);
+	// ↑ 클라가 호출 → 서버에서 실행. Day 4의 통로②와 동일한 구조
+
+	
 
 };

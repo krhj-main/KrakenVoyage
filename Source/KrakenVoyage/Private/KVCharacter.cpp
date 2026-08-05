@@ -7,6 +7,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Components/CapsuleComponent.h"
 #include "InputActionValue.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 AKVCharacter::AKVCharacter()
@@ -23,6 +24,7 @@ AKVCharacter::AKVCharacter()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 	
+	
 
 }
 
@@ -33,15 +35,16 @@ void AKVCharacter::BeginPlay()
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
-		if(UEnhancedInputLocalPlayerSubsystem* Subsystem = 
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
 		{
 			if (DefaultMappingContext)
 			{
 				Subsystem->AddMappingContext(DefaultMappingContext, 0);
-			}			
+			}
 		}
 	}
+	
 }
 
 /*
@@ -53,24 +56,6 @@ void AKVCharacter::Tick(float DeltaTime)
 }
 */
 
-// Called to bind functionality to input
-void AKVCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-	// Enhanced Input
-	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
-	{
-		EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AKVCharacter::Move);
-		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AKVCharacter::Look);
-		// ↑ Triggered = 입력이 활성인 매 틱. 이동/시점에 적합
-
-		EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
-		EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);	
-		// ↑ Started = 누른 순간, Completed = 뗀 순간
-	}
-
-}
 
 void AKVCharacter::Move(const FInputActionValue& Value)
 {
@@ -96,4 +81,41 @@ void AKVCharacter::Look(const FInputActionValue& Value)
 	AddControllerPitchInput(Axis.Y);
 }
 
+void AKVCharacter::StartSprint()
+{
+	ServerSetSprinting(true);
+	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+}
+void AKVCharacter::StopSprint()
+{
+	ServerSetSprinting(false);
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+}
+void AKVCharacter::ServerSetSprinting_Implementation(bool bNewSprinting)
+{
+	GetCharacterMovement()->MaxWalkSpeed = bNewSprinting ? SprintSpeed : WalkSpeed;
+}
+
+// Called to bind functionality to input
+void AKVCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	// Enhanced Input
+	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AKVCharacter::Move);
+		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AKVCharacter::Look);
+		// ↑ Triggered = 입력이 활성인 매 틱. 이동/시점에 적합
+
+		EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
+		EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);	
+		// ↑ Started = 누른 순간, Completed = 뗀 순간
+
+		EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &AKVCharacter::StartSprint);
+		EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &AKVCharacter::StopSprint);
+		// 달리기 바인드액션
+	}
+
+}
 
