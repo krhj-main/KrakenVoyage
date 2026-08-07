@@ -7,6 +7,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Components/CapsuleComponent.h"
 #include "InputActionValue.h"
+#include "KVExplorationBox.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -47,14 +48,20 @@ void AKVCharacter::BeginPlay()
 	
 }
 
-/*
+
 // Called every frame
 void AKVCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (IsLocallyControlled())
+	{
+		TraceForBox();
+		// ↑ 내 화면의 문제이므로 소유 클라에서만. 서버가 남의 시선을 매 프레임 계산할 이유가 없다
+	}
+
 }
-*/
+
 
 
 void AKVCharacter::Move(const FInputActionValue& Value)
@@ -96,6 +103,49 @@ void AKVCharacter::ServerSetSprinting_Implementation(bool bNewSprinting)
 	GetCharacterMovement()->MaxWalkSpeed = bNewSprinting ? SprintSpeed : WalkSpeed;
 }
 
+// 박스 부분
+void AKVCharacter::TraceForBox()
+{
+	const FVector Start = FirstPersonCamera->GetComponentLocation();
+	const FVector End = Start + FirstPersonCamera->GetComponentRotation().Vector() * InteractDistance;
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	FHitResult Hit;
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit, Start, End, ECC_Visibility, Params);
+
+	FocusedBox = bHit ? Cast<AKVExplorationBox>(Hit.GetActor()) : nullptr;
+	// ↑ Cast는 타입이 안 맞으면 nullptr을 준다. 별도 검사가 필요 없다
+
+	if (FocusedBox && !FocusedBox->IsOpen() && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(1, 0.1f, FColor::Green, TEXT("[E] 상자 열기"));
+		// ↑ 키를 1로 고정 → 매 프레임 같은 줄을 덮어쓴다 (-1이면 화면이 도배된다)
+	}
+}
+
+void AKVCharacter::Interact()
+{
+	if (FocusedBox)
+	{
+		ServerRequestOpenBox(FocusedBox);
+	}
+}
+
+void AKVCharacter::ServerRequestOpenBox_Implementation(AKVExplorationBox* Box)
+{
+	if (!Box) { return; }
+
+	// --- 검증 자리 (Day 6) ---
+	// 거리가 실제로 가까운가? (클라가 조작한 요청 차단)
+	// 이 플레이어에게 행동권이 있는가?
+	// 남의 구역 상자인가?
+
+	Box->OpenBox();
+}
+
 // Called to bind functionality to input
 void AKVCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -115,6 +165,9 @@ void AKVCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &AKVCharacter::StartSprint);
 		EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &AKVCharacter::StopSprint);
 		// 달리기 바인드액션
+
+		//박스부분 바인딩
+		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AKVCharacter::Interact);
 	}
 
 }
